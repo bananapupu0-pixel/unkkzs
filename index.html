@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>うんこ崩し 💩</title>
+<style>
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; display:grid; place-items:center;
+    background:linear-gradient(#9edcff 0 70%,#80cf75 70%);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    overflow:hidden; touch-action:none;
+  }
+  #wrap{width:min(94vw,720px); text-align:center}
+  h1{margin:6px 0;font-size:clamp(24px,5vw,40px)}
+  #hud{display:flex;justify-content:space-between;font-weight:800;margin:4px 4px 8px}
+  canvas{
+    width:100%; height:auto; display:block;
+    background:linear-gradient(#bfe9ff,#f8fdff);
+    border:5px solid #51301c; border-radius:18px;
+    box-shadow:0 10px 0 #382014,0 18px 30px #0003;
+  }
+  #msg{font-weight:800;margin-top:12px;min-height:1.5em}
+  button{
+    border:0;border-radius:999px;padding:10px 18px;font-weight:900;font-size:16px;
+    background:#6b3e22;color:white;box-shadow:0 4px 0 #402313;cursor:pointer;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>💩 うんこ崩し 💩</h1>
+  <div id="hud"><span id="score">SCORE 0</span><span id="lives">❤️❤️❤️</span></div>
+  <canvas id="game" width="720" height="620"></canvas>
+  <div id="msg">← → / A D / 指でパドルを動かす</div>
+  <button id="restart" hidden>もう一回うんこを崩す</button>
+</div>
+<script>
+const c=document.querySelector('#game'),x=c.getContext('2d');
+const scoreEl=document.querySelector('#score'),livesEl=document.querySelector('#lives'),
+msg=document.querySelector('#msg'),restart=document.querySelector('#restart');
+
+let paddle,ball,poops,score,lives,running,round,speedMultiplier,keys={};
+
+function resetBall(){
+  ball={x:360,y:500,r:9,vx:(Math.random()<.5?-1:1)*2.1*speedMultiplier,vy:-2.6*speedMultiplier};
+  paddle={x:300,y:565,w:120,h:17};
+}
+function init(){
+  score=0;lives=3;running=true;round=1;speedMultiplier=1;poops=[];
+  const rows=5, cols=9;
+  for(let r=0;r<rows;r++) for(let col=0;col<cols;col++)
+    poops.push({x:42+col*72,y:50+r*72,w:58,h:58,alive:true,wiggle:Math.random()*6.28});
+  resetBall();restart.hidden=true;msg.textContent='← → / A D / 指でパドルを動かす';hud();
+}
+function hud(){scoreEl.textContent='SCORE '+score;livesEl.textContent='❤️'.repeat(lives)}
+
+function poop(px,py,w,h,t){
+  x.save(); x.translate(px+w/2,py+h/2);
+  x.rotate(Math.sin(t)*.035);
+  x.font=`${Math.floor(h*.78)}px "Apple Color Emoji","Segoe UI Emoji",sans-serif`;
+  x.textAlign='center';x.textBaseline='middle';x.fillText('💩',0,2);x.restore();
+}
+function roundedRect(px,py,w,h,r){
+  x.beginPath();x.roundRect(px,py,w,h,r);x.fill();
+}
+function draw(){
+  x.clearRect(0,0,c.width,c.height);
+  // clouds
+  x.globalAlpha=.55;x.fillStyle='#fff';
+  for(const [cx,cy] of [[100,32],[590,26]]){
+    x.beginPath();x.arc(cx,cy,24,0,7);x.arc(cx+27,cy+4,18,0,7);x.arc(cx-25,cy+6,16,0,7);x.fill();
+  }
+  x.globalAlpha=1;
+  const now=performance.now()/500;
+  for(const p of poops) if(p.alive) poop(p.x,p.y,p.w,p.h,now+p.wiggle);
+
+  x.fillStyle='#6b3e22';roundedRect(paddle.x,paddle.y,paddle.w,paddle.h,9);
+  x.fillStyle='#a86a3d';roundedRect(paddle.x+8,paddle.y+3,paddle.w-16,5,3);
+
+  const g=x.createRadialGradient(ball.x-3,ball.y-4,2,ball.x,ball.y,ball.r);
+  g.addColorStop(0,'white');g.addColorStop(.25,'#ffe9a8');g.addColorStop(1,'#e9a71a');
+  x.fillStyle=g;x.beginPath();x.arc(ball.x,ball.y,ball.r,0,7);x.fill();
+}
+function update(){
+  if(!running)return;
+  if(keys.ArrowLeft||keys.a) paddle.x-=7;
+  if(keys.ArrowRight||keys.d) paddle.x+=7;
+  paddle.x=Math.max(0,Math.min(c.width-paddle.w,paddle.x));
+
+  ball.x+=ball.vx;ball.y+=ball.vy;
+  if(ball.x-ball.r<0&&ball.vx<0||ball.x+ball.r>c.width&&ball.vx>0)ball.vx*=-1;
+  if(ball.y-ball.r<0&&ball.vy<0)ball.vy*=-1;
+
+  if(ball.vy>0 && ball.y+ball.r>=paddle.y && ball.y-ball.r<=paddle.y+paddle.h &&
+     ball.x>=paddle.x && ball.x<=paddle.x+paddle.w){
+    const hit=(ball.x-(paddle.x+paddle.w/2))/(paddle.w/2);
+    ball.vx=hit*3.25*speedMultiplier; ball.vy=-Math.abs(ball.vy); ball.y=paddle.y-ball.r-1;
+  }
+
+  for(const p of poops) if(p.alive &&
+    ball.x+ball.r>p.x && ball.x-ball.r<p.x+p.w &&
+    ball.y+ball.r>p.y && ball.y-ball.r<p.y+p.h){
+      p.alive=false;score+=100;hud();ball.vy*=-1;
+      if(!poops.some(q=>q.alive)){
+        round++;
+        speedMultiplier*=1.2;
+        for(const q of poops) q.alive=true;
+        resetBall();
+        msg.textContent=`💩 ROUND ${round}！ うんこ全復活・速度UP！`;
+      }
+      break;
+  }
+  if(ball.y-ball.r>c.height){
+    lives--;hud();
+    if(lives<=0){running=false;msg.textContent=`💩 GAME OVER　FINAL SCORE: ${score}`;restart.hidden=false}
+    else resetBall();
+  }
+}
+function loop(){update();draw();requestAnimationFrame(loop)}
+addEventListener('keydown',e=>{keys[e.key]=true;if(['ArrowLeft','ArrowRight'].includes(e.key))e.preventDefault()});
+addEventListener('keyup',e=>keys[e.key]=false);
+function movePointer(e){
+  const rect=c.getBoundingClientRect();
+  const clientX=e.touches?e.touches[0].clientX:e.clientX;
+  paddle.x=(clientX-rect.left)*c.width/rect.width-paddle.w/2;
+  paddle.x=Math.max(0,Math.min(c.width-paddle.w,paddle.x));
+}
+c.addEventListener('mousemove',e=>{if(e.buttons)movePointer(e)});
+c.addEventListener('touchmove',e=>{movePointer(e);e.preventDefault()},{passive:false});
+c.addEventListener('touchstart',movePointer);
+restart.onclick=init;
+init();loop();
+</script>
+</body>
+</html>
